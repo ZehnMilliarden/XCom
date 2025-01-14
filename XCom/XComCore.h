@@ -8,12 +8,12 @@
 #define _XCOM_PACKING 8
 #define xcomoffsetofclass(base, derived) ((unsigned long*)((unsigned long)(static_cast<base*>((derived*)_XCOM_PACKING))-_XCOM_PACKING))
 
-typedef int (__stdcall _XCOM_CREATORFUNC)(
+typedef XCOMRESULT(__stdcall _XCOM_CREATORFUNC)(
 	void* pv,
 	const XComGUID& riid,
 	void** ppv);
 
-typedef int(__stdcall _XCOM_CREATORARGFUNC)(
+typedef XCOMRESULT(__stdcall _XCOM_CREATORARGFUNC)(
 	void* pv,
 	const XComGUID& riid,
 	void** ppv,
@@ -41,18 +41,18 @@ struct _XCOM_OBJMAP_ENTRY
 	IXComUnknown* pCF;
 };
 
-inline int __stdcall XComInternalQueryInterface(void* pThis, _XCOM_INTMAP_ENTRY* pEntries, const XComGUID& riid, void** ppvObject) noexcept
+inline XCOMRESULT __stdcall XComInternalQueryInterface(void* pThis, _XCOM_INTMAP_ENTRY* pEntries, const XComGUID& riid, void** ppvObject) noexcept
 {
     assert(nullptr != pEntries);
     assert(nullptr != pThis);
 
     if(pThis == NULL || pEntries == NULL)
-	    return false;
+	    return XCOM_E_INVALIDARG;
 
     assert(_XCOM_SIMPLEMAPENTRY == pEntries->pFunc);
     if (nullptr == ppvObject)
     {
-        return false;
+        return XCOM_E_INVALIDARG;
     }
 
     if (IsEqualUnknownIID(riid))
@@ -60,10 +60,10 @@ inline int __stdcall XComInternalQueryInterface(void* pThis, _XCOM_INTMAP_ENTRY*
         IXComUnknown* pUnk = (IXComUnknown*)(unsigned long*)((unsigned long)pThis + (unsigned long)pEntries->dw);
         pUnk->AddRef();
         *ppvObject = pUnk;
-        return true;
+        return XCOM_S_OK;
     }
 
-    bool bRet = false;
+    XCOMRESULT hr = XCOM_E_NOINTERFACE;
     for(;;pEntries++)
     {
         if (nullptr == pEntries->pFunc)
@@ -80,23 +80,23 @@ inline int __stdcall XComInternalQueryInterface(void* pThis, _XCOM_INTMAP_ENTRY*
                 IXComUnknown* pUnk = (IXComUnknown*)(unsigned long*)((unsigned long)pThis + (unsigned long)pEntries->dw);
                 pUnk->AddRef();
                 *ppvObject = pUnk;
-                bRet = true;
+                hr = XCOM_S_OK;
                 break;
             }
 
-            bRet = pEntries->pFunc(pThis, riid, ppvObject, pEntries->dw);
-            if (bRet)
+            hr = pEntries->pFunc(pThis, riid, ppvObject, pEntries->dw);
+            if (XCOM_SUCCEEDED(hr))
             {
                 break;
             }
-            if (!bBline && !bRet)
+            if (!bBline && !XCOM_SUCCEEDED(hr))
             {
                 break;
             }
         }
     }
 
-    return bRet;
+    return hr;
 }
 
 class XComModuleManger;
@@ -157,10 +157,10 @@ public:
         }
     }
 
-    int GetClassObject(const XComGUID& clsid,const XComGUID& riid, void** ppv) noexcept
+    XCOMRESULT GetClassObject(const XComGUID& clsid,const XComGUID& riid, void** ppv) noexcept
     {
         *ppv = nullptr;
-        int nRet = true;
+        XCOMRESULT hr = XCOM_E_NOINTERFACE;
         if (nullptr != m_pObjMap)
         {
             _XCOM_OBJMAP_ENTRY* pEntry = m_pObjMap;
@@ -174,8 +174,8 @@ public:
                         if (nullptr == pEntry->pCF)
                         {
                             IXComUnknown* factory = NULL;
-                            nRet = pEntry->pfnGetClassObject(pEntry->pfnCreateInstance, XComGuidOf<IXComUnknown>(), (void**)&factory);
-                            if (nRet)
+                            hr = pEntry->pfnGetClassObject(pEntry->pfnCreateInstance, XComGuidOf<IXComUnknown>(), (void**)&factory);
+                            if (XCOM_SUCCEEDED(hr))
                             {
                                 pEntry->pCF = factory;
                             }
@@ -184,7 +184,7 @@ public:
                     
                     if (nullptr != pEntry->pCF)
                     {
-                        nRet = pEntry->pCF->QueryInterface(riid, ppv);
+                        hr = pEntry->pCF->QueryInterface(riid, ppv);
                     }
                     break;
                 }
@@ -192,14 +192,14 @@ public:
             }
         }
 
-        return nRet;
+        return hr;
     }
 
-    int DllCanUnloadNow() noexcept {
-        return m_nRef.load() == 0;
+    XCOMRESULT DllCanUnloadNow() noexcept {
+        return m_nRef.load() == 0 ? XCOM_S_OK : XCOM_E_FAIL;
     }
 
-    int DllGetClassObject(const XComGUID& clsid, const XComGUID& riid, void** ppv) noexcept {
+    XCOMRESULT DllGetClassObject(const XComGUID& clsid, const XComGUID& riid, void** ppv) noexcept {
         return GetClassObject(clsid, riid, ppv);
     }
 

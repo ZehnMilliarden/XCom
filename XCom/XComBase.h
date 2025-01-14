@@ -5,6 +5,8 @@
 #include <string.h>
 #include <cassert>
 
+#include "XComError.h"
+
 struct XComGUID
 {
     unsigned long  Data1;
@@ -55,7 +57,7 @@ struct XComGUID
 static const XComGUID XCOM_GUID_NULL;
 static const XComGUID XCOM_IID_NULL = XCOM_GUID_NULL;
 
-__inline int IsEqualGUID(const XComGUID& guid1, const XComGUID& guid2) {
+__inline bool IsEqualGUID(const XComGUID& guid1, const XComGUID& guid2) {
     return 0 == memcmp(&guid1, &guid2, sizeof(XComGUID));
 }
 
@@ -92,23 +94,23 @@ struct TypeGUID<TYPE> { \
 
 struct IXComUnknown
 {
-    virtual int __stdcall QueryInterface(const XComGUID& guid, void** ppInterface) = 0;
+    virtual XCOMRESULT __stdcall QueryInterface(const XComGUID& guid, void** ppInterface) = 0;
     virtual int __stdcall AddRef() = 0;
     virtual int __stdcall Release() = 0;
 
     template<typename T>
-    int __stdcall QueryInterface(T** ppInterface) {
+    XCOMRESULT __stdcall QueryInterface(T** ppInterface) {
         return QueryInterface(XComGuidOf<T>(), (void**)ppInterface);
     }
 };
 XCOM_DEFINE_GUID_FOR_TYPE(IXComUnknown, "00000000-0000-0000-C000-000000000046");
 
 struct IXComClassFactory : public IXComUnknown {
-    virtual int __stdcall CreateInstance(
+    virtual XCOMRESULT __stdcall CreateInstance(
         IXComUnknown* pUnkOuter,
         const XComGUID& iid,
         void** ppvObject) = 0;
-    virtual int __stdcall LockServer(bool bLock) = 0;
+    virtual XCOMRESULT __stdcall LockServer(bool bLock) = 0;
 };
 XCOM_DEFINE_GUID_FOR_TYPE(IXComClassFactory, "00000001-0000-0000-C000-000000000046");
 

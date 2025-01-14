@@ -15,25 +15,25 @@
 
 #define XCOM_BEGIN_MAP(x) public:\
     typedef x _XComMapClass;\
-    static int __stdcall _Cache(void* pv, const XComGUID& riid, void** ppvObject, void* pCacheData) {\
+    static XCOMRESULT __stdcall _Cache(void* pv, const XComGUID& riid, void** ppvObject, void* pCacheData) {\
         _XComMapClass* p = (_XComMapClass*)pv;\
         p->Lock(); \
-        bool bRet = false; \
+        XCOMRESULT hr = XCOM_E_FAIL; \
         try\
         {\
-            bRet = XCComObjectRootBase::_Cache(pv, riid, ppvObject, pCacheData);\
+            hr = XCComObjectRootBase::_Cache(pv, riid, ppvObject, pCacheData);\
         }\
         catch (...) \
         {\
            \
         }\
         p->Unlock();\
-        return bRet;\
+        return hr;\
     }\
     IXComUnknown* _GetRawUnknown() noexcept {\
         return nullptr;\
     }\
-    int _InternalQueryInterface(const XComGUID& riid, void** ppvObject) noexcept {\
+    XCOMRESULT _InternalQueryInterface(const XComGUID& riid, void** ppvObject) noexcept {\
         return InternalQueryInterface(this, _GetEntries(), riid, ppvObject);\
     }\
     const static _XCOM_INTMAP_ENTRY* __stdcall _GetEntries() {\
@@ -49,7 +49,7 @@
     } \
     virtual int __stdcall AddRef() = 0;\
     virtual int __stdcall Release() = 0;\
-    virtual int __stdcall QueryInterface(const XComGUID& riid, void** ppvObject) = 0;
+    virtual XCOMRESULT __stdcall QueryInterface(const XComGUID& riid, void** ppvObject) = 0;
 
 #define XCOM_DECLARE_GET_CONTROLLING_UNKNOWN() public:\
 	virtual IXComUnknown* GetControllingUnknown() noexcept { return GetUnknown(); }
@@ -121,12 +121,12 @@ public:
 
     ~XCComObjectRootBase() {}
 
-    bool FinalConstruct() { 
-        return true; 
+    XCOMRESULT FinalConstruct() {
+        return XCOM_S_OK; 
     }
 
-    bool _FinalConstruct() {
-        return true;
+    XCOMRESULT _FinalConstruct() {
+        return XCOM_S_OK;
     }
 
     void FinalRelease() {
@@ -145,7 +145,7 @@ public:
         return m_pOuterUnknown->Release();
     }
 
-    int OuterQueryInterface(const XComGUID& guid, void** ppInterface) {
+    XCOMRESULT OuterQueryInterface(const XComGUID& guid, void** ppInterface) {
         return m_pOuterUnknown->QueryInterface(guid, ppInterface);
     }
 
@@ -162,12 +162,12 @@ public:
         assert(0 == m_nRef.load());
     }
 
-    static int __stdcall InternalQueryInterface(void* pThis, const _XCOM_INTMAP_ENTRY* pEntries, const XComGUID& riid, void** ppvObject) {
+    static XCOMRESULT __stdcall InternalQueryInterface(void* pThis, const _XCOM_INTMAP_ENTRY* pEntries, const XComGUID& riid, void** ppvObject) {
         assert(nullptr != ppvObject);
         assert(nullptr != pThis);
         assert(_XCOM_SIMPLEMAPENTRY == pEntries->pFunc);
-        int nRet = XComInternalQueryInterface(pThis, (_XCOM_INTMAP_ENTRY*)pEntries, riid, ppvObject);
-        return nRet;
+        XCOMRESULT hr = XComInternalQueryInterface(pThis, (_XCOM_INTMAP_ENTRY*)pEntries, riid, ppvObject);
+        return hr;
     }
 
     int InternalAddRef() {
@@ -181,21 +181,21 @@ public:
         return l;
     }
 
-    static int __stdcall _Cache(void* pv, const XComGUID& guid, void** ppvObject, void* pCacheData)
+    static XCOMRESULT __stdcall _Cache(void* pv, const XComGUID& guid, void** ppvObject, void* pCacheData)
     {
-        bool bRet = false;
+        XCOMRESULT hr = XCOM_E_NOINTERFACE;
         _XCOM_CACHEDATA* pCache = (_XCOM_CACHEDATA*)pCacheData;
         IXComUnknown** ppUnk = (IXComUnknown**)((unsigned long*)pv + pCache->nOffsetVar);
         *ppvObject = nullptr;
         if (nullptr == *ppUnk) 
         {
-            bRet = pCache->pCreatorFunc(pv, guid, ppvObject);
+            hr = pCache->pCreatorFunc(pv, guid, ppvObject);
         }
         else 
         {
-            bRet = (*ppUnk)->QueryInterface(guid, ppvObject);
+            hr = (*ppUnk)->QueryInterface(guid, ppvObject);
         }
-        return bRet;
+        return hr;
     }
 
 protected:
@@ -308,22 +308,22 @@ public:
         return l;
     }
 
-    int __stdcall QueryInterface(const XComGUID& riid, void** ppvObject) {
+    XCOMRESULT __stdcall QueryInterface(const XComGUID& riid, void** ppvObject) {
         return this->_InternalQueryInterface(riid, ppvObject);
     }
 
     template<class Q>
-    int QueryInterface(Q** ppvObject) {
+    XCOMRESULT QueryInterface(Q** ppvObject) {
         return this->QueryInterface(XComGuidOf<Q>(), ppvObject);
     }
 
-    static int __stdcall CreateInstance(XCComObject<Base>** ppvObject) {
+    static XCOMRESULT __stdcall CreateInstance(XCComObject<Base>** ppvObject) {
         assert(nullptr != ppvObject);
         if (nullptr == ppvObject)
-            return false;
+            return XCOM_E_INVALIDARG;
 
         *ppvObject = nullptr;
-        bool bRet = false;
+        XCOMRESULT hr = XCOM_E_OUTOFMEMORY;
         XCComObject<Base>* p = nullptr;
         try
         {
@@ -337,14 +337,14 @@ public:
         {
             p->SetVoid(nullptr);
             p->InternalFinalConstructAddRef();
-            bRet = p->FinalConstruct();
-            if (bRet)
+            hr = p->FinalConstruct();
+            if (XCOM_SUCCEEDED_STRICT(hr))
             {
                 p->_FinalConstruct();
             }
             p->InternalFinalConstructRelease();
 
-            if (!bRet)
+            if (XCOM_FAILED_STRICT(hr))
             {
                 delete p;
                 p = nullptr;
@@ -352,7 +352,7 @@ public:
         }
 
         *ppvObject = p;
-        return bRet;
+        return hr;
     }
 };
 
@@ -374,7 +374,7 @@ public:
         return this->OuterRelease();
     }
 
-    int __stdcall QueryInterface(const XComGUID& guid, void** ppvObject) {
+    XCOMRESULT __stdcall QueryInterface(const XComGUID& guid, void** ppvObject) {
         return this->OuterQueryInterface(guid, ppvObject);
     }
 
@@ -405,7 +405,7 @@ public:
         XComModuleManger::GetInstance()->Unlock();
     }
 
-    bool FinalConstruct() {
+    XCOMRESULT FinalConstruct() {
         _MyXCComObjectRootEx::FinalConstruct();
         return m_contained.FinalConstruct();
     }
@@ -429,12 +429,12 @@ public:
         return l;
     }
 
-    int __stdcall QueryInterface(const XComGUID& guid, void** ppvObject) {
+    XCOMRESULT __stdcall QueryInterface(const XComGUID& guid, void** ppvObject) {
         assert(nullptr != ppvObject);
         if (nullptr == ppvObject)
-            return false;
+            return XCOM_E_INVALIDARG;
         *ppvObject = nullptr;
-        bool bRet = true;
+        XCOMRESULT hr = XCOM_S_OK;
         if (IsEqualUnknownIID(guid))
         {
             *ppvObject = (void*)(IXComUnknown*)this;
@@ -442,26 +442,26 @@ public:
         }
         else
         {
-            bRet = m_contained._InternalQueryInterface(guid, ppvObject);
+            hr = m_contained._InternalQueryInterface(guid, ppvObject);
         }        
-        return bRet;
+        return hr;
     }
 
     template<class Q>
-    bool __stdcall QueryInterface(Q** ppvObject) {
+    XCOMRESULT __stdcall QueryInterface(Q** ppvObject) {
         return this->QueryInterface(XComGuidOf<Q>(), (void**)ppvObject);
     }
 
-    static int __stdcall CreateInstance(
+    static XCOMRESULT __stdcall CreateInstance(
         IXComUnknown* pUnkOuter,
         XCComAggObject<contained>** ppvObject) 
     {
         assert(nullptr != ppvObject);
         if (nullptr == ppvObject)
-            return false;
+            return XCOM_E_INVALIDARG;
 
         *ppvObject = nullptr;
-        bool bRet = false;
+        XCOMRESULT hr = XCOM_E_OUTOFMEMORY;
         XCComAggObject<contained>* p = nullptr;
         try
         {
@@ -475,14 +475,14 @@ public:
         {
             p->SetVoid(nullptr);
             p->InternalFinalConstructAddRef();
-            bRet = p->FinalConstruct();
-            if (bRet)
+            hr = p->FinalConstruct();
+            if (XCOM_SUCCEEDED(hr))
             {
                 p->_FinalConstruct();
             }
             p->InternalFinalConstructRelease();
 
-            if (!bRet)
+            if (!XCOM_SUCCEEDED(hr))
             {
                 delete p;
                 p = nullptr;
@@ -490,7 +490,7 @@ public:
         }
 
         *ppvObject = p;
-        return bRet;
+        return hr;
     }
 
     XCComContainedObject<contained> m_contained;
@@ -533,17 +533,17 @@ public:
         return l;
     }
 
-    int __stdcall QueryInterface(const XComGUID& guid, void** ppvObject) {
+    XCOMRESULT __stdcall QueryInterface(const XComGUID& guid, void** ppvObject) {
         return this->_InternalQueryInterface(guid, ppvObject);
     }
 
-    static int __stdcall CreateInstance(XCComObjectCached<Base>** ppvObject) {
+    static XCOMRESULT __stdcall CreateInstance(XCComObjectCached<Base>** ppvObject) {
         assert(nullptr != ppvObject);
         if (nullptr == ppvObject)
-            return false;
+            return XCOM_E_INVALIDARG;
 
         *ppvObject = nullptr;
-        bool bRet = false;
+        XCOMRESULT hr = XCOM_E_OUTOFMEMORY;
         XCComObjectCached<Base>* p = nullptr;
         try
         {
@@ -557,15 +557,15 @@ public:
         {
             p->SetVoid(nullptr);
             p->InternalFinalConstructAddRef();
-            bRet = p->FinalConstruct();
-            if (bRet)
+            hr = p->FinalConstruct();
+            if (XCOM_SUCCEEDED(hr))
             {
                 p->_FinalConstruct();
             }
             p->InternalFinalConstructRelease();
         }    
         *ppvObject = p;
-        return bRet;     
+        return hr;
     }
 };
 
@@ -582,26 +582,30 @@ public:
         
     }
 
-    int __stdcall CreateInstance(IXComUnknown* pUnkOuter, const XComGUID& riid, void** ppvObject) {
+    XCOMRESULT __stdcall CreateInstance(IXComUnknown* pUnkOuter, const XComGUID& riid, void** ppvObject) {
         assert(nullptr != ppvObject);
-        bool bRet = false;
+        XCOMRESULT hr = XCOM_E_INVALIDARG;
         if (nullptr != ppvObject)
         {
             *ppvObject = nullptr;
             if ((nullptr == pUnkOuter) || IsEqualUnknownIID(riid))
             {
-                bRet = m_pfnCreateInstance(pUnkOuter, riid, ppvObject);
+                hr = m_pfnCreateInstance(pUnkOuter, riid, ppvObject);
+            }
+            else
+            {
+                hr = XCOM_E_NOAGGREGATION;
             }
         }
-        return bRet;
+        return hr;
     }
 
-    int __stdcall LockServer(bool bLock) {
+    XCOMRESULT __stdcall LockServer(bool bLock) {
         if (bLock)
             XComModuleManger::GetInstance()->Lock();
         else
             XComModuleManger::GetInstance()->Unlock();
-        return true;
+        return XCOM_S_OK;
     }
 
     void SetVoid(void* pv) {
@@ -624,24 +628,24 @@ public:
         
     }
 
-    int __stdcall CreateInstance(IXComUnknown* pUnkOuter, const XComGUID& riid, void** ppvObject) {
-        bool bRet = false;
+    XCOMRESULT __stdcall CreateInstance(IXComUnknown* pUnkOuter, const XComGUID& riid, void** ppvObject) {
+        XCOMRESULT hr = XCOM_E_INVALIDARG;
         if (nullptr != ppvObject)
         {
             assert(nullptr != ppvObject);
             if (nullptr == pUnkOuter)
             {
-                if (m_bCreate && nullptr == m_spObj)
+                if (XCOM_SUCCEEDED_STRICT(m_hrCreate)&& nullptr == m_spObj)
                 {
                     Lock();
-                    if (m_bCreate && nullptr == m_spObj)
+                    if (XCOM_SUCCEEDED_STRICT(m_hrCreate) && nullptr == m_spObj)
                     {
                         XCComObjectCached<T> *p;
-                        m_bCreate = XCComObjectCached<T>::CreateInstance(&p);
-                        if (m_bCreate)
+                        m_hrCreate = XCComObjectCached<T>::CreateInstance(&p);
+                        if (XCOM_SUCCEEDED(m_hrCreate))
                         {
-                            m_bCreate = p->QueryInterface(XComGuidOf<IXComUnknown>(), (void**)&m_spObj);
-                            if (!m_bCreate)
+                            m_hrCreate = p->QueryInterface(XComGuidOf<IXComUnknown>(), (void**)&m_spObj);
+                            if (XCOM_FAILED(m_hrCreate))
                             {
                                 delete p;
                             }
@@ -649,22 +653,28 @@ public:
                     }
                     Unlock();
                 }
-            }
-
-            if (m_bCreate)
-            {
-                bRet = m_spObj->QueryInterface(riid, ppvObject);
+                else
+                {
+                    if (XCOM_SUCCEEDED_STRICT(m_hrCreate))
+                    {
+                        hr = m_spObj->QueryInterface(riid, ppvObject);
+                    }
+                    else
+                    {
+                        hr = m_hrCreate;
+                    }
+                }
             }
             else
             {
-                bRet = m_bCreate;
+                hr = XCOM_E_NOAGGREGATION;
             }
         }
 
-        return bRet;
+        return hr;
     }
 
-    bool m_bCreate = true;
+    XCOMRESULT m_hrCreate = XCOM_S_OK;
     XComPtr<IXComUnknown> m_spObj;
 };
 
@@ -677,12 +687,12 @@ public:
     }
 
     template<class Q>
-    static int __stdcall CreateInstance(IXComUnknown* pUnkOuter, Q** ppvObject) {
+    static XCOMRESULT __stdcall CreateInstance(IXComUnknown* pUnkOuter, Q** ppvObject) {
         return T::_CreatorClass::CreateInstance(pUnkOuter, XComGuidOf<Q>(), (void**)ppvObject);
     }
 
     template<class Q>
-    static int __stdcall CreateInstance(Q** ppvObject) {
+    static XCOMRESULT __stdcall CreateInstance(Q** ppvObject) {
         return T::_CreatorClass::CreateInstance(nullptr,  XComGuidOf<Q>(), (void**)ppvObject);
     }
 };
@@ -691,52 +701,52 @@ template <class T1>
 class XCComCreator
 {
 public:
-    static int __stdcall CreateInstance(void* pCreaterInstance, const XComGUID& riid, void** ppvObject) {
+    static XCOMRESULT __stdcall CreateInstance(void* pCreaterInstance, const XComGUID& riid, void** ppvObject) {
         assert(nullptr != ppvObject);
         if (nullptr == ppvObject)
         {
-            return  false;
+            return XCOM_E_INVALIDARG;
         }
 
-        bool bRet = false;
+        XCOMRESULT hr = XCOM_E_OUTOFMEMORY;
         *ppvObject = nullptr;
         T1* p = new(std::nothrow) T1(pCreaterInstance);
         if (nullptr != p)
         {
             p->SetVoid(pCreaterInstance);
             p->InternalFinalConstructAddRef();
-            bRet = p->FinalConstruct();
-            if (bRet)
+            hr = p->FinalConstruct();
+            if (XCOM_SUCCEEDED_STRICT(hr))
             {
-                bRet =p->_FinalConstruct();
+                hr =p->_FinalConstruct();
             }
             p->InternalFinalConstructRelease();
 
-            if (bRet)
+            if (XCOM_SUCCEEDED_STRICT(hr))
             {
-                bRet = p->QueryInterface(riid, ppvObject);
+                hr = p->QueryInterface(riid, ppvObject);
             }
 
-            if (!bRet)
+            if (XCOM_FAILED_STRICT(hr))
             {
                 delete p;
             }
         }
-        return bRet;
+        return hr;
     }
 };
 
-template <int ret>
+template <XCOMRESULT hr>
 class XCComFailCreater
 {
 public:
-    static int __stdcall CreateInstance(void* pCreaterInstance, const XComGUID &riid, void **ppvObject)
+    static XCOMRESULT __stdcall CreateInstance(void* pCreaterInstance, const XComGUID &riid, void **ppvObject)
     {
         if (nullptr == ppvObject)
         {
-            return false;
+            return XCOM_E_INVALIDARG;
         }
-        return ret;
+        return hr;
     }
 };
 
@@ -744,7 +754,7 @@ template <class T1, class T2>
 class XCComCreator2
 {
 public:
-    static int __stdcall CreateInstance(void* pCreaterInstance, const XComGUID& riid, void** ppvObject) {
+    static XCOMRESULT __stdcall CreateInstance(void* pCreaterInstance, const XComGUID& riid, void** ppvObject) {
         assert(nullptr != ppvObject);
         return (nullptr == pCreaterInstance) ? T1::CreateInstance(nullptr, riid, ppvObject) : T2::CreateInstance(pCreaterInstance, riid, ppvObject);
     }
@@ -755,28 +765,28 @@ public:
 #define XCOM_DECLARE_CLASSFACTORY_SINGLETON(obj) XCOM_DECLARE_CLASSFACTORY_EX(XCComClassFactorySingleton<obj>);
 
 #define XCOM_DECLARE_NOT_AGGREGATABLE(x) public:\
-    typedef XCComCreator2<XCComCreator<XCComObject<x>>, XCComFailCreater<false>> _CreatorClass;
+    typedef XCComCreator2<XCComCreator<XCComObject<x>>, XCComFailCreater<XCOM_E_FAIL>> _CreatorClass;
 #define XCOM_DECLARE_AGGREGATABLE(x) public:\
     typedef XCComCreator2<XCComCreator<XCComObject<x>>, XCComCreator<XCComAggObject<x>>> _CreatorClass;
 #define XCOM_DECLARE_ONLY_AGGREGATABLE(x) public:\
     typedef XCComCreator2<XCComFailCreater<false>, XCComCreator<XCComAggObject<x>>> _CreatorClass;
 
 #define XCOM_DECLARE_CLS_INSTANCE_CREATER(cls) public:\
-    static bool __stdcall CreateClsInstance(XComPtr<XCComObject<cls>>& pObj)\
+    static XCOMRESULT __stdcall CreateClsInstance(XComPtr<XCComObject<cls>>& pObj)\
     {\
         XCComObject<cls>* _pTarget = nullptr;\
-        bool bRet = XCComObject<cls>::CreateInstance(&_pTarget);\
-        if (bRet)\
+        XCOMRESULT hr = XCComObject<cls>::CreateInstance(&_pTarget);\
+        if (XCOM_SUCCEEDED_STRICT(hr))\
         {\
             pObj = _pTarget;\
         }\
         return hr;\
     }\
-    static bool __stdcall CreateClsInstance(_Inout_opt_ IXComUnknown* pUnkOuter, XComPtr<XCComAggObject<cls>>& pObj)\
+    static XCOMRESULT __stdcall CreateClsInstance(_Inout_opt_ IXComUnknown* pUnkOuter, XComPtr<XCComAggObject<cls>>& pObj)\
     {\
         XCComAggObject<cls>* _pTarget = nullptr;\
-        bool bRet = XCComAggObject<cls>::CreateInstance(pUnkOuter,&_pTarget);\
-        if (bRet)\
+        XCOMRESULT hr = XCComAggObject<cls>::CreateInstance(pUnkOuter,&_pTarget);\
+        if (XCOM_SUCCEEDED_STRICT(hr))\
         {\
             pObj = _pTarget;\
         }\

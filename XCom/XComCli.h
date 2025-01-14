@@ -105,10 +105,10 @@ public:
     }
 
     template<class Q>
-    bool QueryInterface(Q** ppInterface) {
+    XCOMRESULT QueryInterface(Q** ppInterface) {
         assert(ppInterface != nullptr);
         if (ppInterface == nullptr) 
-            return false;
+            return XCOM_E_INVALIDARG;
         return m_pObject->QueryInterface(ppInterface);
     }
 
@@ -157,7 +157,7 @@ public:
         if (!this->IsEqualObject(other))
         {
             IXComUnknown* pTemp = this->m_pObject;
-            if ((other == NULL) || (0 == other->QueryInterface<T>(&this->m_pObject))) {
+            if ((other == NULL) || (XCOM_S_OK == other->QueryInterface<T>(&this->m_pObject))) {
                 this->m_pObject = NULL;
 
                 if (pTemp)
@@ -184,5 +184,99 @@ bool XComPtrBase<T>::IsEqualObject(IXComUnknown *pObject) const noexcept
 
     return pUnk1 == pUnk2;
 }
+
+
+template <class T>
+class XComCAdapt
+{
+public:
+    XComCAdapt()
+    {
+    }
+
+    XComCAdapt(const T& rSrc) :
+        m_T(rSrc)
+    {
+    }
+
+    XComCAdapt(const XComCAdapt<T>& rSrCA) :
+        m_T(rSrCA.m_T)
+    {
+    }
+
+    XComCAdapt<T>& operator=(const T& rSrc)
+    {
+        m_T = rSrc;
+
+        return *this;
+    }
+
+    XComCAdapt<T>& operator=(const XComCAdapt<T>& rSrc)
+    {
+        if (this != &rSrc)
+        {
+            m_T = rSrc.m_T;
+        }
+        return *this;
+    }
+
+    XComCAdapt(T&& rSrc) :
+        m_T(static_cast<T&&>(rSrc))
+    {
+    }
+
+    XComCAdapt(XComCAdapt<T>&& rSrCA) :
+        m_T(static_cast<T&&>(rSrCA.m_T))
+    {
+    }
+
+    XComCAdapt<T>& operator=(T&& rSrc)
+    {
+        m_T = static_cast<T&&>(rSrc);
+
+        return *this;
+    }
+
+    XComCAdapt<T>& operator=(XComCAdapt<T>&& rSrc)
+    {
+        if (this != &rSrc)
+        {
+            m_T = static_cast<T&&>(rSrc.m_T);
+        }
+        return *this;
+    }
+
+    bool operator<(_In_ const T& rSrc) const
+    {
+        return m_T < rSrc;
+    }
+
+    bool operator==(_In_ const T& rSrc) const
+    {
+        return m_T == rSrc;
+    }
+
+    operator T& ()
+    {
+        return m_T;
+    }
+
+    operator const T& () const
+    {
+        return m_T;
+    }
+
+    T& operator->()
+    {
+        return m_T;
+    }
+
+    const T& operator->() const
+    {
+        return m_T;
+    }
+
+    T m_T;
+};
 
 #endif // __XCOMCLI_H__
