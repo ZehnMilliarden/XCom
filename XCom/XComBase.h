@@ -7,6 +7,12 @@
 
 #include "XComError.h"
 
+#ifdef _WIN32
+#define XCOMCALL __stdcall
+#else
+#define XCOMCALL 
+#endif
+
 struct XComGUID
 {
     unsigned long  Data1;
@@ -22,6 +28,7 @@ struct XComGUID
     }
 
     explicit XComGUID(const char* szGuidString) {
+#ifdef _WIN32
         sscanf_s(szGuidString,
             "%8lx-%4hx-%4hx-%2hhx%2hhx-%2hhx%2hhx%2hhx%2hhx%2hhx%2hhx",
             &Data1, &Data2, &Data3,
@@ -29,20 +36,35 @@ struct XComGUID
             &Data4[4], &Data4[5], &Data4[6], &Data4[7], sizeof(Data4[0]), sizeof(Data4[1]),
             sizeof(Data4[2]), sizeof(Data4[3]), sizeof(Data4[4]), sizeof(Data4[5]),
             sizeof(Data4[6]), sizeof(Data4[7]));
+#elif __linux__
+        sscanf(szGuidString,
+            "%8lx-%4hx-%4hx-%2hhx%2hhx-%2hhx%2hhx%2hhx%2hhx%2hhx%2hhx",
+            &Data1, &Data2, &Data3,
+            &Data4[0], &Data4[1], &Data4[2], &Data4[3],
+            &Data4[4], &Data4[5], &Data4[6], &Data4[7], sizeof(Data4[0]), sizeof(Data4[1]));
+#endif
     }
 
     XComGUID(const XComGUID& other) {
         Data1 = other.Data1;
         Data2 = other.Data2;
         Data3 = other.Data3;
+#ifdef _WIN32
         ::memcpy_s(Data4, sizeof(Data4), other.Data4, sizeof(Data4));
+#elif __linux__
+        ::memcpy(Data4, other.Data4, sizeof(Data4));
+#endif // 
     }
 
     XComGUID& operator=(const XComGUID& other) {
         Data1 = other.Data1;
         Data2 = other.Data2;
         Data3 = other.Data3;
+#ifdef _WIN32
         ::memcpy_s(Data4, sizeof(Data4), other.Data4, sizeof(Data4));
+#elif __linux__
+        ::memcpy(Data4, other.Data4, sizeof(Data4));
+#endif // 
         return *this;
     }
 
@@ -50,7 +72,7 @@ struct XComGUID
         return Data1 == other.Data1 &&
                Data2 == other.Data2 &&
                Data3 == other.Data3 &&
-               memcmp(Data4, other.Data4, sizeof(Data4)) == 0;
+               ::memcmp(Data4, other.Data4, sizeof(Data4)) == 0;
     }
 };
 
@@ -94,27 +116,27 @@ struct TypeGUID<TYPE> { \
 
 struct IXComUnknown
 {
-    virtual XCOMRESULT __stdcall QueryInterface(const XComGUID& guid, void** ppInterface) = 0;
-    virtual int __stdcall AddRef() = 0;
-    virtual int __stdcall Release() = 0;
+    virtual XCOMRESULT XCOMCALL QueryInterface(const XComGUID& guid, void** ppInterface) = 0;
+    virtual int XCOMCALL AddRef() = 0;
+    virtual int XCOMCALL Release() = 0;
 
     template<typename T>
-    XCOMRESULT __stdcall QueryInterface(T** ppInterface) {
+    XCOMRESULT XCOMCALL QueryInterface(T** ppInterface) {
         return QueryInterface(XComGuidOf<T>(), (void**)ppInterface);
     }
 };
 XCOM_DEFINE_GUID_FOR_TYPE(IXComUnknown, "00000000-0000-0000-C000-000000000046");
 
 struct IXComClassFactory : public IXComUnknown {
-    virtual XCOMRESULT __stdcall CreateInstance(
+    virtual XCOMRESULT XCOMCALL CreateInstance(
         IXComUnknown* pUnkOuter,
         const XComGUID& iid,
         void** ppvObject) = 0;
-    virtual XCOMRESULT __stdcall LockServer(bool bLock) = 0;
+    virtual XCOMRESULT XCOMCALL LockServer(bool bLock) = 0;
 };
 XCOM_DEFINE_GUID_FOR_TYPE(IXComClassFactory, "00000001-0000-0000-C000-000000000046");
 
-__inline bool IsEqualUnknownIID(const XComGUID& iid) {
+inline bool IsEqualUnknownIID(const XComGUID& iid) {
     return IsEqualGUID(iid, XComGuidOf<IXComUnknown>());
 }
 

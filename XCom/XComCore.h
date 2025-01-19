@@ -8,12 +8,12 @@
 #define _XCOM_PACKING 8
 #define xcomoffsetofclass(base, derived) ((unsigned long*)((unsigned long)(static_cast<base*>((derived*)_XCOM_PACKING))-_XCOM_PACKING))
 
-typedef XCOMRESULT(__stdcall _XCOM_CREATORFUNC)(
+typedef XCOMRESULT(XCOMCALL _XCOM_CREATORFUNC)(
 	void* pv,
 	const XComGUID& riid,
 	void** ppv);
 
-typedef XCOMRESULT(__stdcall _XCOM_CREATORARGFUNC)(
+typedef XCOMRESULT(XCOMCALL _XCOM_CREATORARGFUNC)(
 	void* pv,
 	const XComGUID& riid,
 	void** ppv,
@@ -41,7 +41,7 @@ struct _XCOM_OBJMAP_ENTRY
 	IXComUnknown* pCF;
 };
 
-inline XCOMRESULT __stdcall XComInternalQueryInterface(void* pThis, _XCOM_INTMAP_ENTRY* pEntries, const XComGUID& riid, void** ppvObject) noexcept
+inline XCOMRESULT XCOMCALL XComInternalQueryInterface(void* pThis, _XCOM_INTMAP_ENTRY* pEntries, const XComGUID& riid, void** ppvObject) noexcept
 {
     assert(nullptr != pEntries);
     assert(nullptr != pThis);
@@ -106,17 +106,17 @@ public:
     XComModule();
 
     virtual ~XComModule() {
-        
+
     }
 
     unsigned long Lock() noexcept {
-        assert(-1L != m_nRef.load(), "-1L != m_nRef.load()");
+        assert(-1L != m_nRef.load());
         return m_nRef.fetch_add(1, std::memory_order_acq_rel) + 1;
     }
 
     unsigned long Unlock() noexcept {
         unsigned long l = m_nRef.fetch_sub(1, std::memory_order_acq_rel) - 1;
-        assert(-1L != m_nRef.load(), "-1L != m_nRef.load()");
+        assert(-1L != m_nRef.load());
         return l;
     }
 
@@ -174,7 +174,7 @@ public:
                         if (nullptr == pEntry->pCF)
                         {
                             IXComUnknown* factory = NULL;
-                            hr = pEntry->pfnGetClassObject(pEntry->pfnCreateInstance, XComGuidOf<IXComUnknown>(), (void**)&factory);
+                            hr = pEntry->pfnGetClassObject((void*)pEntry->pfnCreateInstance, XComGuidOf<IXComUnknown>(), (void**)&factory);
                             if (XCOM_SUCCEEDED(hr))
                             {
                                 pEntry->pCF = factory;
@@ -195,17 +195,17 @@ public:
         return hr;
     }
 
-    XCOMRESULT DllCanUnloadNow() noexcept {
+    XCOMRESULT ModuleCanUnloadNow() noexcept {
         return m_nRef.load() == 0 ? XCOM_S_OK : XCOM_E_FAIL;
     }
 
-    XCOMRESULT DllGetClassObject(const XComGUID& clsid, const XComGUID& riid, void** ppv) noexcept {
+    XCOMRESULT ModuleGetClassObject(const XComGUID& clsid, const XComGUID& riid, void** ppv) noexcept {
         return GetClassObject(clsid, riid, ppv);
     }
 
 private:
-    std::atomic_long m_nRef = 0;
-    _XCOM_OBJMAP_ENTRY* m_pObjMap = nullptr;
+    std::atomic_long m_nRef;
+    _XCOM_OBJMAP_ENTRY* m_pObjMap;
     std::mutex m_mtx;
 };
 
@@ -225,7 +225,7 @@ public:
     }
 
     XComModule* GetModule() const {
-        assert(nullptr != m_pModule, "nullptr != m_pModule");
+        assert(nullptr != m_pModule);
         return m_pModule;
     }
 
@@ -245,6 +245,8 @@ private:
 };
 
 XComModule::XComModule() {
+    m_nRef.store(0);
+    m_pObjMap = nullptr;
     XComModuleManger::GetInstance()->AttachModule(this);
 }
 

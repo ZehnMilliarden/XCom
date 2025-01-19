@@ -8,8 +8,8 @@ class _NoAddRefReleaseOnXCComPtr
     : public T
 {
 private:
-    int __stdcall AddRef() = 0;
-    int __stdcall Release() = 0;
+    int XCOMCALL AddRef() = 0;
+    int XCOMCALL Release() = 0;
 };
 
 template<class T>
@@ -157,7 +157,7 @@ public:
         if (!this->IsEqualObject(other))
         {
             IXComUnknown* pTemp = this->m_pObject;
-            if ((other == NULL) || (XCOM_S_OK == other->QueryInterface<T>(&this->m_pObject))) {
+            if ((other == NULL) || XCOM_FAILED_STRICT(other->QueryInterface(&this->m_pObject))) {
                 this->m_pObject = NULL;
 
                 if (pTemp)
@@ -246,12 +246,12 @@ public:
         return *this;
     }
 
-    bool operator<(_In_ const T& rSrc) const
+    bool operator<(const T& rSrc) const
     {
         return m_T < rSrc;
     }
 
-    bool operator==(_In_ const T& rSrc) const
+    bool operator==(const T& rSrc) const
     {
         return m_T == rSrc;
     }
